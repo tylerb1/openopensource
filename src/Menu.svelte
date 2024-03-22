@@ -91,9 +91,16 @@
       formValid = false
       formError = newTree
     } else {
-      const newCategoryName = clickedAction.name === 'Move' || clickedAction.name === 'Merge' 
-        ? fieldValues.category.name 
-        : ''
+      let newCategoryName = ''
+      if (clickedAction.name === 'Rename') {
+        newCategoryName = fieldValues.newName
+      } else if (clickedAction.name === 'Move' || clickedAction.name === 'Merge') {
+        newCategoryName = fieldValues.category.name 
+      } else if (clickedAction.name === 'Delete' || clickedAction.name === 'Split') {
+        newCategoryName = currentNode.path[currentNode.path.length - 2]
+      } else if (clickedAction.name === 'New category') {
+        newCategoryName = fieldValues.newName
+      }
       updateTree(newTree, newCategoryName)
       reset()
     }
@@ -117,10 +124,22 @@
           formError = 'Invalid URL'
         } else if (clickedAction.name === 'Update Url' && fieldValues[key as keyof FieldValues] === currentNode.url) {
           formError = 'New URL must be different'
+        } else if (root.descendants().some((r: any) => r.data.url === fieldValues[key as keyof FieldValues])) {
+          formError = 'Another resource already has this URL'
         }
       } else if (key.includes('category')) {
         if (!fieldValues[key as keyof FieldValues]) {
           formError = 'Category missing'
+        } else if (
+          clickedAction.name === 'Move' && 
+          fieldValues[key as keyof FieldValues].name === currentNode.path[currentNode.path.length - 2]
+        ) {
+          formError = 'Already in this category'
+        } else if (
+          clickedAction.name === 'Merge' && 
+          fieldValues[key as keyof FieldValues].name === currentNode.name
+        ) {
+          formError = 'Can\'t merge category with itself'
         }
       } else if (key.includes('Resources')) {
         fieldValues[key as keyof FieldValues].forEach((resource: { name: string, url: string }, index: number) => {
@@ -166,7 +185,6 @@
   menu
   flex 
   flex-col 
-  flex-wrap 
   basis-0
   gap-4 
   text-sm

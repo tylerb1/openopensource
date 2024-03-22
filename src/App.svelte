@@ -4,7 +4,7 @@
   import { hierarchy, pack } from 'd3-hierarchy'
   import { transition } from 'd3-transition'
   import { scaleLinear } from 'd3-scale'
-  import { getPath, type Tree } from './utils'
+  import { type Tree } from './utils'
 	import { onMount } from 'svelte';
   import Menu from './Menu.svelte'
   import Modal from './Modal.svelte';
@@ -67,9 +67,20 @@
     }
   }
 
+  export const getPath = (data: any) => {
+    let path = [data.data.name];
+    let parent = data.parent;
+    while (parent) {
+      path = [parent.data.name, ...path];
+      parent = parent.parent;
+    }
+    return path;
+  }
+
   const setPackFunc = () => {
     packFunc = (data: any) => pack()
       .size([svgWidth, svgHeight])
+      .radius((d) => !d.value ? 5 : d.value / 200)
       .padding(4)
       (hierarchy(data)
         .sum(d => d.value)
@@ -199,52 +210,73 @@
       });
   };
 
+  const getRepoInfo = async (owner: string, repo: string) => {
+    const url = `https://api.github.com/repos/${owner}/${repo}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    let descriptionLines: string[] = [];
+    if (data.description) {
+      let currentLine = "";
+      const descriptionWords = data.description.split(" ");
+      descriptionWords.forEach((w: string) => {
+        if (currentLine.length + w.length < 40) {
+          currentLine += w + " ";
+        } else {
+          descriptionLines.push(currentLine);
+          currentLine = w + " ";
+        }
+      })
+      descriptionLines.push(currentLine);
+    }
+    return { descriptionLines, stars: data.stargazers_count };
+  }
+
   const clickedCategory = (name: string, e?: any) => {
     const rootData = root?.descendants()?.find((d: any) => d.data.name === name);
     if (rootData) {
       const path = getPath(rootData)
       zoom(rootData, e);
-      clickedObjectType = 'category'
+      clickedObjectType = 'url' in rootData.data ? 'resource' : 'category'
       currentNode = {
         name,
         path,
-        url: null
+        url: rootData.data.url || null
       }
       clickedAction = null
+
+      if (rootData.data.url && rootData.data.url.includes("github.com")) {
+        const [owner, repo] = rootData.data.url.split("github.com/")[1].split("/");
+        getRepoInfo(owner, repo).then((data) => {
+          currentNode = {
+            ...currentNode,
+            description: data.descriptionLines,
+            stars: data.stars
+          }
+        });
+      }
     }
   }
 
   const clickedCircle = (e: any, rootData: any) => {
     if (choosingCategoryForForm) {
-      if (('children' in rootData.data) && currentNode.name !== rootData.data.name) {
+      if (('children' in rootData.data)) {
         const path = getPath(rootData)
         zoom(rootData, e);
         categoryForForm = {
           name: rootData.data.name,
-          rootData,
           path,
         }
       }
     } else {
-      clickedAction = null
       categoryForForm = null
       if (activeFocus !== rootData) {
-        if (('children' in rootData.data)) {
-          clickedCategory(rootData.data.name, e)
-        } else {
-          zoom(rootData, e);
-          const path = getPath(rootData)
-          clickedObjectType = 'resource'
-          currentNode = {
-            name: rootData.data.name,
-            path,
-            url: rootData.data.url
-          }
-        }
-      } else if (!('children' in rootData)) {
+        clickedCategory(rootData.data.name, e)
+      } else if (!('children' in rootData.data)) {
+        clickedAction = null
         e.stopPropagation()
         window.open(rootData.data.url, '_blank')
       } else {
+        clickedAction = null
         currentNode = { name: tree.name, path: [tree.name], url: null }
       }
     }
@@ -297,7 +329,7 @@
   "
 >
   <div 
-    class="hamburger flex flex-col justify-between w-6 h-4 z-2 {isMenuOpen ? 'cursor-pointer' : ''}" 
+    class="hamburger flex flex-col justify-between w-6 h-[16px] min-h-[16px] z-2 {isMenuOpen ? 'cursor-pointer' : ''}" 
     class:open={isMenuOpen} 
     role="button"
     tabindex="-4"
@@ -348,6 +380,8 @@
         clickedObjectType = "category"
         clickedAction = null
         currentNode = { name: tree.name, path: [tree.name], url: null }
+      } else {
+        categoryForForm = { name: tree.name, path: [tree.name] }
       }
     }}
     on:keydown={() => {}}
@@ -360,7 +394,7 @@
             hover:stroke-black 
             hover:stroke-[3px] 
             {rootData.parent 
-              ? rootData.children 
+              ? rootData.data.children
                 ? '' 
                 : 'fill-green-600' 
               : 'pointer-events-none'
@@ -368,7 +402,7 @@
           "
           role="button"
           tabindex="-1"
-          fill={rootData.children ? color(rootData.depth) : 'null'} 
+          fill={rootData.data.children ? color(rootData.depth) : 'null'} 
           transform="translate({(rootData.x - activeZoomA) * activeZoomK},{(rootData.y - activeZoomB) * activeZoomK})"
           r={rootData.r * activeZoomK}
           on:click={(e) => clickedCircle(e, rootData)}
@@ -395,9 +429,20 @@
               ) ? "inline" : "none"
             };
           "
-          transform="translate({(rootDes.x - activeZoomA) * activeZoomK},{(rootDes.y - activeZoomB) * activeZoomK})"
+          transform="translate({(rootDes.x - activeZoomA) * activeZoomK},{(rootDes.y - activeZoomB) * activeZoomK - (currentNode.description ? 40 : 0)})"
         >
           {rootDes?.data?.name}
+
+          {#if currentNode && currentNode.name === rootDes?.data?.name && currentNode.url}
+            <tspan font-size="12px" x="0" dy="2.5em">{currentNode.url}</tspan>
+          {/if}
+
+          {#if currentNode && currentNode.name === rootDes?.data?.name && currentNode.description}
+            {#each currentNode.description as line, index}
+              <tspan font-size="12px" x="0" dy="{index === 0 ? '2.5em' : '1.8em'}">{line}</tspan>
+            {/each}
+            <tspan font-size="12px" x="0" dy="2.5em">{currentNode.stars} stars on GitHub</tspan>
+          {/if}
         </text>
       {/each}
     </g>
@@ -451,10 +496,6 @@
     height: 2px;
     background-color: white;
     transition: transform 0.3s ease;
-  }
-
-  .hamburger {
-    min-height: 12px;
   }
 
   .hamburger.open .hamburger-line.top {

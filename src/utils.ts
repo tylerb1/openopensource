@@ -2,6 +2,8 @@ import set from 'lodash.set'
 
 export interface Tree {
   name: string,
+  url?: string,
+  value?: number,
   children: Tree[]
 }
 
@@ -13,16 +15,6 @@ export interface FieldValues {
   category2Name?: string;
   category?: any;
   children?: any;
-}
-
-export const getPath = (data: any) => {
-  let path = [data.data.name];
-  let parent = data.parent;
-  while (parent) {
-    path = [parent.data.name, ...path];
-    parent = parent.parent;
-  }
-  return path;
 }
 
 const getPathToSubTree = (tree: Tree, path: string[], pointToCategory: boolean) => {
@@ -88,7 +80,7 @@ export const actions: { [key: string]: any }[] = [
     ],
     categoryFn: (tree: Tree, fieldValues: FieldValues, path: string[]) => {
       // Add the new category and its resources to the category with categoryName
-      const { pathString, subTree } = getPathToSubTree(tree, path, false)
+      const { pathString, subTree } = getPathToSubTree(tree, path, true)
       const newSubTree = {
         name: subTree.name,
         children: [
@@ -115,7 +107,7 @@ export const actions: { [key: string]: any }[] = [
       const { subTree: resource } = getPathToSubTree(tree, path, true)
       const { pathString: parentPathString, subTree: parentSubTree } = getPathToSubTree(tree, path.slice(0, path.length - 1), false)
 
-      let newCategoryPath = getPath(fieldValues.category.rootData)
+      let newCategoryPath = fieldValues.category.path
       newCategoryPath = newCategoryPath.slice(0, path.length - 1)
       const { pathString: newPathString, subTree: newCategory } = getPathToSubTree(tree, newCategoryPath, false)
       const addedNode = [...newCategory.children, resource]
@@ -132,7 +124,7 @@ export const actions: { [key: string]: any }[] = [
     },
     category: [
       {
-        fieldName: 'To category',
+        fieldName: 'Category to move into',
         fieldType: 'category',
       }
     ],
@@ -141,7 +133,7 @@ export const actions: { [key: string]: any }[] = [
       const { subTree: category } = getPathToSubTree(tree, path, false)
       const { pathString: parentPathString, subTree: parentSubTree } = getPathToSubTree(tree, path.slice(0, path.length - 1), false)
 
-      let newCategoryPath = getPath(fieldValues.category.rootData)
+      let newCategoryPath = fieldValues.category.path
       const { pathString: newPathString, subTree: newCategory } = getPathToSubTree(tree, newCategoryPath, false)
       const addedNode = [...newCategory.children, category]
       if (addedNode.length > 10) {
@@ -180,9 +172,10 @@ export const actions: { [key: string]: any }[] = [
     ],
     resourceFn: (tree: Tree, fieldValues: FieldValues, path: string[]) => {
       // Update the URL of the resource with resourceName
-      const { pathString } = getPathToSubTree(tree, path, true)
+      const { pathString, subTree } = getPathToSubTree(tree, path, true)
       const updatedNode = {
-        name: fieldValues.newUrl,
+        name: subTree.name,
+        url: fieldValues.newUrl,
         value: 1000,
       }
       set(tree, pathString, updatedNode)
@@ -208,7 +201,7 @@ export const actions: { [key: string]: any }[] = [
       const removedNode = [...parentCategory.children.filter((child: Tree) => child.name !== originalCategory.name)]
       set(tree, parentPathString, removedNode)
 
-      let otherCategoryPath = getPath(fieldValues.category.rootData)
+      let otherCategoryPath = fieldValues.category.path
       const { pathString: otherPathString, subTree: otherCategory } = getPathToSubTree(tree, otherCategoryPath, true)
       const mergedNode = {
         name: fieldValues.newName,
@@ -285,9 +278,10 @@ export const actions: { [key: string]: any }[] = [
     ],
     resourceFn: (tree: Tree, fieldValues: FieldValues, path: string[]) => {
       // Find the resource in the tree and update its name
-      const { pathString } = getPathToSubTree(tree, path, true)
+      const { pathString, subTree } = getPathToSubTree(tree, path, true)
       const updatedNode = {
         name: fieldValues.newName,
+        url: subTree.url,
         value: 1000,
       }
       set(tree, pathString, updatedNode)
