@@ -4,8 +4,6 @@
 
 Open Open Source is a visual browser for open source projects that anyone can edit.
 
-[Live version](https://openopensource.com)
-
 ### Built With
 
 - [Svelte](https://svelte.dev/)
